@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskManager - Sistema de Tarefas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>TaskManager</h1>
+            <p>Sistema de Gerenciamento de Tarefas - DevOps Bootcamp</p>
+            <p>
+                <small>
+                    Versao: {{ version }} | 
+                    Ambiente: {{ environment }}
+                </small>
+            </p>
+        </div>
+
+        <!-- Formulario para adicionar tarefa -->
+        <div class="task-form">
+            <h2>Nova Tarefa</h2>
+            <form method="POST" action="/add" class="form-group">
+                <input type="text" 
+                       name="title" 
+                       placeholder="O que voce precisa fazer?" 
+                       required 
+                       autofocus>
+                <button type="submit">Adicionar</button>
+            </form>
+        </div>
+
+        <!-- Lista de tarefas -->
+        <div class="tasks-section">
+            <h2>Minhas Tarefas ({{ tasks|length }})</h2>
+            
+            {% if tasks %}
+                {% for task in tasks %}
+                <div class="task {% if task.completed %}completed{% endif %}">
+                    <div class="task-title">
+                        {{ task.title }}
+                        {% if task.completed %}
+                            <span class="badge badge-success">Concluida</span>
+                        {% else %}
+                            <span class="badge badge-pending">Pendente</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="task-actions">
+                        {% if not task.completed %}
+                            <a href="/complete/{{ task.id }}" class="btn btn-complete">
+                                Concluir
+                            </a>
+                        {% endif %}
+                        <a href="/delete/{{ task.id }}" 
+                           class="btn btn-delete"
+                           onclick="return confirm('Tem certeza que deseja deletar esta tarefa?')">
+                            Deletar
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-tasks">
+                    <p>Nenhuma tarefa ainda!</p>
+                    <p>Comece adicionando uma tarefa no formulario acima.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Informacoes do sistema -->
+        <div class="info-section">
+            <h3>Informacoes do Sistema</h3>
+            <p><strong>Status:</strong> Operacional</p>
+            <p><strong>Modulo Atual:</strong> 3 - Git e Versionamento</p>
+            <p><strong>Proximo Modulo:</strong> 4 - Containerizacao com Docker</p>
+            <p>
+                <strong>Links Uteis:</strong>
+                <a href="/health">Health Check</a> | 
+                <a href="/metrics">Metrics</a> |
+                <a href="/api/tasks">API JSON</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

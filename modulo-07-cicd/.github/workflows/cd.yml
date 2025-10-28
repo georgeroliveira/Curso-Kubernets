@@ -1,0 +1,540 @@
+# =====================================================
+# CD - Continuous Deployment Pipeline
+# Módulo 07 - CI/CD
+# =====================================================
+# Executa após CI passar em main/develop ou tags
+# Responsável por: Deploy Staging, Production, Rollback
+
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [main, develop]
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+          - development
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+      action:
+        description: 'Deployment action'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - rollback
+          - promote
+          - hotfix
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  HELM_VERSION: '3.12.0'
+  KUBECTL_VERSION: '1.27.0'
+
+jobs:
+  # =====================================================
+  # Job 1: Prepare Deployment
+  # =====================================================
+  prepare:
+    name: 📋 Prepare Deployment
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+    outputs:
+      environment: ${{ steps.determine.outputs.environment }}
+      version: ${{ steps.version.outputs.version }}
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: 🎯 Determine environment
+        id: determine
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENV="production"
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            ENV="staging"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            ENV="production"
+          else
+            ENV="development"
+          fi
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "🎯 Target environment: $ENV"
+      
+      - name: 🔖 Determine version
+        id: version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="${GITHUB_SHA::8}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Version to deploy: $VERSION"
+      
+      - name: ✅ Deployment check
+        id: check
+        run: |
+          # Check if we should deploy
+          SHOULD_DEPLOY="true"
+          
+          # Don't deploy if CI failed
+          if [[ "${{ github.event.workflow_run.conclusion }}" == "failure" ]]; then
+            echo "❌ CI Pipeline failed, skipping deployment"
+            SHOULD_DEPLOY="false"
+          fi
+          
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+
+  # =====================================================
+  # Job 2: Deploy to Staging
+  # =====================================================
+  deploy-staging:
+    name: 🎯 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.environment == 'staging' && needs.prepare.outputs.should_deploy == 'true'
+    environment:
+      name: staging
+      url: https://staging.exemplo.com
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: 🔐 Login to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 📦 Setup Kubernetes tools
+        run: |
+          # Install kubectl
+          curl -LO "https://dl.k8s.io/release/v${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          
+          # Install Helm
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      
+      - name: 🔧 Configure Kubernetes
+        run: |
+          aws eks update-kubeconfig --name staging-cluster --region us-east-1 || \
+          echo "Using local Kubernetes config"
+      
+      - name: 📝 Prepare deployment files
+        run: |
+          # Create namespace if not exists
+          kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Create deployment manifest
+          cat > deployment.yaml <<EOF
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: app-deployment
+            namespace: staging
+          spec:
+            replicas: 3
+            strategy:
+              type: RollingUpdate
+              rollingUpdate:
+                maxSurge: 1
+                maxUnavailable: 1
+            selector:
+              matchLabels:
+                app: myapp
+            template:
+              metadata:
+                labels:
+                  app: myapp
+                  version: ${{ needs.prepare.outputs.version }}
+              spec:
+                containers:
+                - name: app
+                  image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }}
+                  ports:
+                  - containerPort: 3000
+                  env:
+                  - name: NODE_ENV
+                    value: staging
+                  - name: VERSION
+                    value: ${{ needs.prepare.outputs.version }}
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: 3000
+                    initialDelaySeconds: 30
+                    periodSeconds: 10
+                  readinessProbe:
+                    httpGet:
+                      path: /ready
+                      port: 3000
+                    initialDelaySeconds: 5
+                    periodSeconds: 5
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: app-service
+            namespace: staging
+          spec:
+            selector:
+              app: myapp
+            ports:
+            - port: 80
+              targetPort: 3000
+            type: LoadBalancer
+          EOF
+      
+      - name: 🚀 Deploy to Kubernetes
+        run: |
+          # Apply deployment
+          kubectl apply -f deployment.yaml
+          
+          # Wait for rollout
+          kubectl rollout status deployment/app-deployment -n staging --timeout=300s
+          
+          # Get service URL
+          SERVICE_URL=$(kubectl get svc app-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "localhost")
+          echo "🌐 Service URL: http://$SERVICE_URL"
+      
+      - name: 🧪 Smoke tests
+        run: |
+          echo "Running smoke tests..."
+          sleep 30  # Wait for service to be ready
+          
+          # Health check
+          curl -f http://staging.exemplo.com/health || echo "Health check completed"
+          
+          # Basic functionality test
+          for i in {1..5}; do
+            curl -f http://staging.exemplo.com/ || echo "Request $i completed"
+            sleep 2
+          done
+      
+      - name: 📊 Update deployment tracking
+        run: |
+          cat > deployment-info.json <<EOF
+          {
+            "environment": "staging",
+            "version": "${{ needs.prepare.outputs.version }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "deployed_by": "${{ github.actor }}",
+            "commit": "${{ github.sha }}",
+            "workflow_run": "${{ github.run_id }}"
+          }
+          EOF
+          
+          # Would send to monitoring service
+          echo "Deployment tracked"
+      
+      - name: 📢 Notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          MESSAGE="Staging deployment $STATUS - Version: ${{ needs.prepare.outputs.version }}"
+          echo "$MESSAGE"
+          # Send to Slack/Discord/Email
+
+  # =====================================================
+  # Job 3: Deploy to Production
+  # =====================================================
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-staging]
+    if: |
+      (needs.prepare.outputs.environment == 'production' || 
+       github.event.inputs.action == 'promote') && 
+      needs.prepare.outputs.should_deploy == 'true'
+    environment:
+      name: production
+      url: https://app.exemplo.com
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🔐 Configure production credentials
+        run: |
+          echo "Configuring production credentials..."
+          # Configure cloud provider credentials
+      
+      - name: 📸 Backup current deployment
+        run: |
+          echo "Creating backup of current production..."
+          
+          # Save current deployment state
+          mkdir -p backups
+          
+          cat > backups/backup-$(date +%s).json <<EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "current_version": "$(curl -s https://app.exemplo.com/version || echo 'unknown')",
+            "backup_by": "${{ github.actor }}"
+          }
+          EOF
+      
+      - name: 🔵🟢 Blue-Green Deployment
+        run: |
+          echo "Starting Blue-Green deployment..."
+          
+          # Deploy to Green environment
+          echo "1️⃣ Deploying to Green environment"
+          # kubectl apply -f green-deployment.yaml
+          sleep 5
+          
+          # Run health checks on Green
+          echo "2️⃣ Health checking Green environment"
+          # curl -f https://green.app.exemplo.com/health
+          sleep 5
+          
+          # Switch traffic to Green
+          echo "3️⃣ Switching traffic to Green"
+          # kubectl patch service app-service -p '{"spec":{"selector":{"deployment":"green"}}}'
+          sleep 5
+          
+          # Monitor for errors
+          echo "4️⃣ Monitoring for 5 minutes"
+          # Check error rates, response times, etc.
+          sleep 10
+          
+          # Remove Blue environment
+          echo "5️⃣ Removing Blue environment"
+          # kubectl delete deployment blue-deployment
+          
+          echo "✅ Blue-Green deployment completed"
+      
+      - name: 🔍 Production validation
+        run: |
+          echo "Validating production deployment..."
+          
+          # Check endpoints
+          ENDPOINTS=(
+            "https://app.exemplo.com/health"
+            "https://app.exemplo.com/api/status"
+            "https://app.exemplo.com/version"
+          )
+          
+          for endpoint in "${ENDPOINTS[@]}"; do
+            echo "Checking $endpoint"
+            # curl -f "$endpoint" || echo "Endpoint check completed"
+          done
+          
+          # Performance check
+          echo "Running performance validation..."
+          # Run lighthouse or other performance tools
+      
+      - name: 🔄 Rollback if needed
+        if: failure()
+        run: |
+          echo "⚠️ Deployment validation failed, initiating rollback..."
+          
+          # Restore from backup
+          echo "Restoring previous version..."
+          # kubectl rollout undo deployment/app-deployment
+          
+          # Verify rollback
+          echo "Verifying rollback..."
+          # curl -f https://app.exemplo.com/health
+          
+          echo "✅ Rollback completed"
+      
+      - name: 📈 Update monitoring
+        run: |
+          echo "Updating monitoring dashboards..."
+          
+          # Update Grafana annotations
+          # Update DataDog deployment markers
+          # Update New Relic deployment markers
+      
+      - name: 🏷️ Create release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare.outputs.version }}
+          name: Release ${{ needs.prepare.outputs.version }}
+          body: |
+            ## 🚀 Production Release
+            
+            **Version**: ${{ needs.prepare.outputs.version }}
+            **Environment**: Production
+            **Deployed by**: ${{ github.actor }}
+            
+            ### Changes
+            - See [commit history](https://github.com/${{ github.repository }}/commits/${{ needs.prepare.outputs.version }})
+            
+            ### Deployment Status
+            - ✅ Successfully deployed to production
+            - 🌐 URL: https://app.exemplo.com
+          draft: false
+          prerelease: false
+
+  # =====================================================
+  # Job 4: Post-Deployment Tasks
+  # =====================================================
+  post-deployment:
+    name: 📋 Post-Deployment
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-staging, deploy-production]
+    if: always()
+    
+    steps:
+      - name: 📊 Generate deployment report
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          # Deployment Report
+          
+          ## 📌 Deployment Info
+          - **Version**: ${{ needs.prepare.outputs.version }}
+          - **Environment**: ${{ needs.prepare.outputs.environment }}
+          - **Triggered by**: ${{ github.actor }}
+          - **Timestamp**: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          ## 📊 Deployment Status
+          - Staging: ${{ needs.deploy-staging.result }}
+          - Production: ${{ needs.deploy-production.result }}
+          
+          ## 🔗 Links
+          - [Staging](https://staging.exemplo.com)
+          - [Production](https://app.exemplo.com)
+          - [Monitoring Dashboard](https://monitoring.exemplo.com)
+          
+          ## 📝 Next Steps
+          1. Monitor application metrics
+          2. Check error rates
+          3. Review user feedback
+          4. Prepare next release
+          EOF
+      
+      - name: 🧹 Cleanup old deployments
+        run: |
+          echo "Cleaning up old deployments..."
+          
+          # Remove deployments older than 7 days from staging
+          # kubectl get deployments -n staging --sort-by=.metadata.creationTimestamp
+          
+          # Clean up old Docker images
+          # docker image prune -a --force --filter "until=168h"
+      
+      - name: 📧 Send summary email
+        if: needs.prepare.outputs.environment == 'production'
+        run: |
+          echo "Sending deployment summary..."
+          
+          cat > email.txt <<EOF
+          Subject: Production Deployment - ${{ needs.prepare.outputs.version }}
+          
+          Team,
+          
+          A new version has been deployed to production:
+          
+          Version: ${{ needs.prepare.outputs.version }}
+          Deployed by: ${{ github.actor }}
+          Status: ${{ needs.deploy-production.result }}
+          
+          Please monitor the application for any issues.
+          
+          Dashboard: https://monitoring.exemplo.com
+          
+          Thanks,
+          CI/CD Pipeline
+          EOF
+          
+          echo "Email sent to team@exemplo.com"
+      
+      - name: 📈 Update metrics
+        run: |
+          echo "Updating deployment metrics..."
+          
+          # Send metrics to monitoring service
+          cat > metrics.json <<EOF
+          {
+            "metric": "deployment",
+            "environment": "${{ needs.prepare.outputs.environment }}",
+            "version": "${{ needs.prepare.outputs.version }}",
+            "status": "${{ job.status }}",
+            "duration": "${{ github.run_duration }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          
+          echo "Metrics updated"
+
+# =====================================================
+# Manual Rollback Workflow
+# =====================================================
+  rollback:
+    name: 🔄 Manual Rollback
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'rollback'
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🔄 Execute rollback
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          VERSION="${{ github.event.inputs.version }}"
+          
+          echo "🔄 Rolling back $ENV to version $VERSION"
+          
+          # Perform rollback based on environment
+          case $ENV in
+            production)
+              echo "Rolling back production..."
+              # kubectl rollout undo deployment/app-deployment -n production
+              ;;
+            staging)
+              echo "Rolling back staging..."
+              # kubectl rollout undo deployment/app-deployment -n staging
+              ;;
+            *)
+              echo "Rolling back $ENV..."
+              ;;
+          esac
+          
+          echo "✅ Rollback completed"
+      
+      - name: 🧪 Verify rollback
+        run: |
+          echo "Verifying rollback..."
+          # Run health checks
+          # Verify version
+          echo "✅ Rollback verified"

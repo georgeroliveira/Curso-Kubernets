@@ -1,0 +1,66 @@
+# Stage 1: Builder
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Instalar dependencias de build (se necessario)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
+COPY requirements.txt .
+
+# Criar virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Instalar dependencias
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime
+FROM python:3.11-slim as runtime
+
+# Metadados
+LABEL maintainer="DevOps Bootcamp"
+LABEL version="2.0"
+LABEL description="TaskManager multi-stage build"
+
+# Variaveis de ambiente
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Instalar apenas runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Criar usuario
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copiar virtual environment do builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Diretorio de trabalho
+WORKDIR /app
+
+# Copiar aplicacao
+COPY --chown=appuser:appuser . .
+
+# Criar diretorio de dados
+RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+
+# Trocar usuario
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Expor porta
+EXPOSE 5000
+
+# Comando
+CMD ["python", "app.py"]

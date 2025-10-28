@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.tox
+*.egg-info
+
+# Environment
+.env
+.env.*
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+
+# Labs e materiais do curso
+labs.md
+conteudo-docker.md
+
+# Temporary files
+*.tmp
+*.temp
+*.backup
+*.bak

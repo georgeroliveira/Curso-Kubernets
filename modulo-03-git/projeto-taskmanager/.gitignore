@@ -1,0 +1,100 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+venv.bak/
+env.bak/
+
+# Flask
+instance/
+.webassets-cache
+
+# Environment Variables
+.env
+.env.local
+.env.production
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+log/
+
+# Testing
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+*.temp
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Secret files
+*.pem
+*.key
+*.crt
+secrets/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Custom
+.notes/
+TODO.md
+scratch/
