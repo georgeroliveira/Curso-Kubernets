@@ -1,0 +1,9 @@
+.env
+.env.local
+logs/
+backups/
+*.log
+*.sql.gz
+data/
+__pycache__/
+.DS_Store
