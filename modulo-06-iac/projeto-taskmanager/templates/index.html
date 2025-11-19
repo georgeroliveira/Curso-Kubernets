@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TaskManager</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <h1>TaskManager</h1>
+  <p>Versão: {{ version }} | Ambiente: {{ environment }}</p>
+
+  <form method="POST" action="/add">
+    <input name="title" placeholder="Nova tarefa..." required>
+    <button type="submit">Adicionar</button>
+  </form>
+
+  <ul>
+    {% for task in tasks %}
+      <li>
+        {{ task.title }}
+        {% if not task.completed %}
+          <a href="/complete/{{ task.id }}">Concluir</a>
+        {% endif %}
+        <a href="/delete/{{ task.id }}">Deletar</a>
+      </li>
+    {% endfor %}
+  </ul>
+
+</body>
+</html>

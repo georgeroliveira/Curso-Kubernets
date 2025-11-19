@@ -1,0 +1,21 @@
+name: Security Scan
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # Todos os dias às 02h
+  workflow_dispatch:
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Rodar Trivy - Scanner de vulnerabilidades
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'projeto-final'
+          severity: 'HIGH,CRITICAL'

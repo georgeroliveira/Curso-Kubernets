@@ -1,0 +1,27 @@
+name: Pipeline Completo
+
+on:
+  push:
+    branches: ["main", "develop"]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Build executado"
+
+  tests:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Testes executados"
+
+  security:
+    runs-on: ubuntu-latest
+    needs: [tests]
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Security Scan executado"

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskManager - Módulo 05</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>TaskManager</h1>
+        <p>Sistema de Gerenciamento de Tarefas</p>
+        <small>Versão: {{ version }} | Ambiente: {{ environment }}</small>
+    </div>
+
+    <div class="task-form">
+        <h2>Nova Tarefa</h2>
+        <form method="POST" action="/add" class="form-group">
+            <input type="text" name="title" placeholder="Digite uma nova tarefa" required>
+            <button type="submit">Adicionar</button>
+        </form>
+    </div>
+
+    <div class="tasks-section">
+        <h2>Tarefas</h2>
+
+        {% for t in tasks %}
+        <div class="task {% if t[2] %}completed{% endif %}">
+            <div class="task-title">{{ t[1] }}</div>
+            <div class="task-actions">
+                {% if not t[2] %}
+                <a class="btn btn-complete" href="/complete/{{ t[0] }}">Concluir</a>
+                {% endif %}
+                <a class="btn btn-delete" href="/delete/{{ t[0] }}">Excluir</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+</body>
+</html>

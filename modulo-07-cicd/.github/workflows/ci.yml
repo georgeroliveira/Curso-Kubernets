@@ -1,435 +1,50 @@
-# =====================================================
-# CI - Continuous Integration Pipeline
-# Módulo 07 - CI/CD
-# =====================================================
-# Executa em todo push e pull request
-# Responsável por: Lint, Build, Test, Security Scan
-
-name: CI Pipeline
+name: CI - Continuous Integration
 
 on:
   push:
-    branches: ['**']
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - 'LICENSE'
+    branches: [ "main", "develop" ]
   pull_request:
-    branches: [main, develop]
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
-
-env:
-  NODE_VERSION: '16'
-  PYTHON_VERSION: '3.10'
-  GO_VERSION: '1.19'
-  CACHE_KEY: ${{ github.sha }}-${{ github.run_number }}
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  # =====================================================
-  # Job 1: Lint and Code Quality
-  # =====================================================
-  lint:
-    name: 🎨 Lint & Code Quality
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Full history for better analysis
-      
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-      
-      - name: 📦 Install dependencies
-        run: |
-          npm ci --prefer-offline --no-audit || npm install
-      
-      - name: 🎨 Run ESLint
-        run: |
-          npm run lint || echo "No lint script found"
-        continue-on-error: true
-      
-      - name: 💅 Run Prettier
-        run: |
-          npx prettier --check . || echo "Code formatting check completed"
-        continue-on-error: true
-      
-      - name: 📊 SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true
-      
-      - name: 📝 Markdown Lint
-        uses: DavidAnson/markdownlint-cli2-action@v11
-        with:
-          globs: '**/*.md'
-        continue-on-error: true
-      
-      - name: 🐍 Python Lint (if applicable)
-        if: hashFiles('**/*.py')
-        run: |
-          pip install flake8 black
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
-          black --check . || true
-      
-      - name: 🔍 Shell Script Lint
-        if: hashFiles('**/*.sh')
-        uses: ludeeus/action-shellcheck@master
-        with:
-          severity: warning
 
-  # =====================================================
-  # Job 2: Build
-  # =====================================================
-  build:
-    name: 🏗️ Build Application
+  tests:
     runs-on: ubuntu-latest
-    needs: lint
-    strategy:
-      matrix:
-        node-version: [14, 16, 18]
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🔧 Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-      
-      - name: 📦 Install dependencies
-        run: |
-          npm ci --prefer-offline --no-audit || npm install
-      
-      - name: 🏗️ Build project
-        run: |
-          npm run build || echo "No build required"
-      
-      - name: 📤 Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-artifacts-node${{ matrix.node-version }}
-          path: |
-            dist/
-            build/
-            .next/
-            out/
-          retention-days: 1
-      
-      - name: 💾 Cache build
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.npm
-            node_modules
-            .next/cache
-          key: build-${{ runner.os }}-node${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            build-${{ runner.os }}-node${{ matrix.node-version }}-
 
-  # =====================================================
-  # Job 3: Test
-  # =====================================================
-  test:
-    name: 🧪 Test Suite
-    runs-on: ubuntu-latest
-    needs: build
-    strategy:
-      matrix:
-        test-type: [unit, integration, e2e]
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-      
-      - name: 📦 Install dependencies
-        run: |
-          npm ci --prefer-offline --no-audit || npm install
-      
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: build-artifacts-node16
-          path: ./dist
-      
-      - name: 🧪 Run ${{ matrix.test-type }} tests
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/testdb
-          REDIS_URL: redis://localhost:6379
-          CI: true
-        run: |
-          case "${{ matrix.test-type }}" in
-            unit)
-              npm run test:unit -- --coverage || npm test || echo "✅ Unit tests completed"
-              ;;
-            integration)
-              npm run test:integration || echo "✅ Integration tests completed"
-              ;;
-            e2e)
-              npx playwright install --with-deps || true
-              npm run test:e2e || echo "✅ E2E tests completed"
-              ;;
-          esac
-      
-      - name: 📊 Upload coverage reports
-        if: matrix.test-type == 'unit'
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-        continue-on-error: true
-      
-      - name: 📤 Upload test results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-results-${{ matrix.test-type }}
-          path: |
-            test-results/
-            coverage/
-            playwright-report/
-          retention-days: 7
+      - name: Checkout código
+        uses: actions/checkout@v4
 
-  # =====================================================
-  # Job 4: Security Scan
-  # =====================================================
-  security:
-    name: 🔒 Security Scanning
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      contents: read
-      security-events: write
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🔍 Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Configurar Python
+        uses: actions/setup-python@v5
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-      
-      - name: 📤 Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-      
-      - name: 🔐 GitGuardian scan
-        uses: GitGuardian/ggshield-action@master
-        env:
-          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
-          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
-          GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
-        continue-on-error: true
-      
-      - name: 🔍 OWASP Dependency Check
-        run: |
-          npm audit --audit-level=moderate || true
-          npx snyk test || true
-        continue-on-error: true
-      
-      - name: 📋 Security Report
-        run: |
-          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "- Trivy: Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- GitGuardian: Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- Dependency Check: Completed" >> $GITHUB_STEP_SUMMARY
+          python-version: "3.10"
 
-  # =====================================================
-  # Job 5: Docker Build
-  # =====================================================
-  docker:
-    name: 🐳 Docker Build & Scan
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: 📝 Create Dockerfile if not exists
+      - name: Instalar dependências
         run: |
-          if [ ! -f Dockerfile ]; then
-            cat > Dockerfile <<'EOF'
-          FROM node:16-alpine
-          WORKDIR /app
-          COPY package*.json ./
-          RUN npm ci --only=production
-          COPY . .
-          EXPOSE 3000
-          CMD ["node", "index.js"]
-          EOF
-          fi
-      
-      - name: 🏗️ Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: false
-          tags: |
-            myapp:latest
-            myapp:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/image.tar
-      
-      - name: 🔍 Scan Docker image
-        uses: aquasecurity/trivy-action@master
-        with:
-          input: /tmp/image.tar
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
-      
-      - name: 📤 Upload Docker image
-        uses: actions/upload-artifact@v3
-        with:
-          name: docker-image
-          path: /tmp/image.tar
-          retention-days: 1
+          pip install -r projeto-final/app/requirements.txt
 
-  # =====================================================
-  # Job 6: Integration Test
-  # =====================================================
-  integration:
-    name: 🔗 Integration Tests
-    runs-on: ubuntu-latest
-    needs: docker
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 📥 Download Docker image
-        uses: actions/download-artifact@v3
-        with:
-          name: docker-image
-          path: /tmp
-      
-      - name: 🐳 Load Docker image
+      - name: Executar testes
         run: |
-          docker load --input /tmp/image.tar
-      
-      - name: 🚀 Start services
-        run: |
-          docker-compose -f docker-compose.test.yml up -d || \
-          docker run -d -p 3000:3000 --name test-app myapp:latest
-          sleep 10
-      
-      - name: 🧪 Run integration tests
-        run: |
-          curl -f http://localhost:3000/health || echo "Health check completed"
-          
-          # Run API tests
-          for i in {1..10}; do
-            curl -f http://localhost:3000/ || true
-            sleep 1
-          done
-      
-      - name: 🧹 Cleanup
-        if: always()
-        run: |
-          docker-compose -f docker-compose.test.yml down || docker stop test-app
+          pytest -q --disable-warnings --maxfail=1
 
-  # =====================================================
-  # Job 7: Final Report
-  # =====================================================
-  report:
-    name: 📊 CI Report
+
+  build-image:
     runs-on: ubuntu-latest
-    needs: [lint, build, test, security, docker, integration]
-    if: always()
-    
+    needs: tests
+
     steps:
-      - name: 📊 Generate CI Report
-        run: |
-          cat >> $GITHUB_STEP_SUMMARY <<EOF
-          # CI Pipeline Report
-          
-          ## 📋 Job Results
-          - Lint: ${{ needs.lint.result }}
-          - Build: ${{ needs.build.result }}
-          - Test: ${{ needs.test.result }}
-          - Security: ${{ needs.security.result }}
-          - Docker: ${{ needs.docker.result }}
-          - Integration: ${{ needs.integration.result }}
-          
-          ## 📌 Build Info
-          - Commit: ${{ github.sha }}
-          - Branch: ${{ github.ref_name }}
-          - Triggered by: ${{ github.actor }}
-          - Workflow: ${{ github.run_number }}
-          
-          ## ✅ Status
-          Overall: ${{ job.status }}
-          EOF
-      
-      - name: 💬 Comment on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Login DockerHub
+        uses: docker/login-action@v3
         with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '✅ CI Pipeline completed! Check the [Actions tab](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
-            })
-        continue-on-error: true
+          username: \${{ secrets.DOCKER_USERNAME }}
+          password: \${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build e push da imagem
+        uses: docker/build-push-action@v5
+        with:
+          context: projeto-final
+          tags: \${{ secrets.DOCKER_USERNAME }}/taskmanager:latest
+          push: true

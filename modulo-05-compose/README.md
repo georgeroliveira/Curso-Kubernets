@@ -1,314 +1,237 @@
-# TaskManager - Módulo 05 - Docker Compose
+# Módulo 05 — Docker Compose e Orquestração Completa
 
-Sistema completo de gerenciamento de tarefas com arquitetura multi-container, alta disponibilidade e pronto para produção.
+O objetivo deste módulo é transformar o TaskManager em uma **arquitetura real**, usando **Docker Compose** para orquestrar múltiplos serviços:
 
-## Stack Tecnológica
+- Flask (aplicação)
+- PostgreSQL (banco)
+- Redis (cache)
+- NGINX (reverse proxy em produção)
+- Gunicorn (WSGI)
+- Health Checks
+- Réplicas
+- Volumes persistentes
+- Scripts de automação
 
-| Tecnologia | Versão | Função |
-|------------|--------|--------|
-| Python Flask | 2.3+ | Aplicação web |
-| PostgreSQL | 15 | Banco de dados |
-| Redis | 7 | Cache e sessões |
-| Nginx | Alpine | Load balancer |
-| Docker Compose | 3.8+ | Orquestração |
+Este módulo marca a transição do projeto para um ambiente **profissional de DevOps**.
 
-## Arquitetura
+---
+
+# 🚀 1. Arquitetura Final
+
+A estrutura final do módulo:
 
 ```
-Internet → Nginx → [App1, App2, App3] → [PostgreSQL, Redis]
-```
 
-- **3 instâncias** da aplicação (alta disponibilidade)
-- **Nginx** como proxy reverso e load balancer
-- **PostgreSQL** para dados persistentes
-- **Redis** para cache e sessões
-- **Redes isoladas** (frontend/backend)
-- **Health checks** automáticos
-- **Auto-restart** em caso de falhas
+modulo-05-compose/
+├── 00-INDICE.md
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── nginx.conf
+├── db/
+│   └── init.sql
+├── logs/
+├── scripts/
+│   ├── backup.sh
+│   ├── deploy.sh
+│   └── restore.sh
+└── projeto-taskmanager/
+├── app.py
+├── config.py
+├── Dockerfile
+├── VERSION
+├── requirements.txt
+├── templates/
+│   └── index.html
+└── static/
+└── style.css
 
-## Quick Start
+````
 
-### Pré-requisitos
+---
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- Git
-- 4GB RAM livre
-- 10GB disco livre
+# 🐳 2. Subindo o Ambiente de Desenvolvimento
 
-### Instalação
+O ambiente de desenvolvimento roda diretamente com:
 
-**1. Clonar repositório:**
 ```bash
-# Linux/Mac
-git clone https://github.com/seu-usuario/taskmanager.git
-cd taskmanager/modulo-05-compose
+docker-compose up -d --build
+````
 
-# Windows PowerShell
-git clone https://github.com/seu-usuario/taskmanager.git
-Set-Location taskmanager\modulo-05-compose
-```
+Ver logs:
 
-**2. Configurar variáveis de ambiente:**
 ```bash
-# Linux/Mac
-cp .env.example .env
-nano .env  # Editar e trocar senhas
-
-# Windows PowerShell
-Copy-Item .env.example .env
-notepad .env  # Editar e trocar senhas
+docker-compose logs -f app
 ```
 
-**3. Subir a stack:**
+Acessar o TaskManager:
+
+```
+http://localhost:5000
+```
+
+---
+
+# 🛢️ 3. Banco de Dados (PostgreSQL)
+
+O banco é criado automaticamente com:
+
+```
+db/init.sql
+```
+
+Para acessar o banco:
+
 ```bash
-docker-compose up -d
+docker exec -it modulo-05-compose-db-1 psql -U user -d taskdb
 ```
 
-**4. Verificar status:**
+Ver tabelas:
+
+```sql
+\d tasks;
+```
+
+---
+
+# ⚡ 4. Redis (Cache)
+
+Testar o Redis:
+
 ```bash
-docker-compose ps
+docker exec -it modulo-05-compose-redis-1 redis-cli ping
 ```
 
-**5. Acessar aplicação:**
+Resultado esperado:
+
+```
+PONG
+```
+
+---
+
+# ❤️ 5. Health Check
+
+Testar health check da aplicação:
+
+```
+http://localhost/health
+```
+
+Saída:
+
+```json
+{
+  "status": "healthy",
+  "db": "ok",
+  "redis": "ok",
+  "version": "0.5.0",
+  "environment": "development"
+}
+```
+
+---
+
+# 🌐 6. Ambiente de Produção (com NGINX + Réplicas)
+
+Iniciar produção:
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+Acessar:
+
 ```
 http://localhost
 ```
 
-## Estrutura do Projeto
-
-```
-modulo-05-compose/
-├── README.md                      # Este arquivo
-├── docker-compose.yml             # Configuração principal
-├── docker-compose.prod.yml        # Override para produção
-├── .env.example                   # Template de variáveis
-├── .env                           # Variáveis (não commitado)
-├── .gitignore
-│
-├── taskmanager/                   # Código da aplicação
-│   ├── app.py                     # Aplicação Flask
-│   ├── logger.py                  # Logging estruturado
-│   ├── Dockerfile                 # Imagem Docker
-│   ├── requirements.txt           # Dependências Python
-│   └── templates/                 # Templates HTML
-│       └── index.html
-│
-├── config/                        # Configurações
-│   └── init.sql                   # Script inicialização DB
-│
-├── nginx/                         # Configuração Nginx
-│   └── nginx.conf                 # Load balancer config
-│
-├── scripts/                       # Scripts de automação
-│   ├── deploy.sh                  # Deploy automatizado
-│   ├── backup.sh                  # Backup do banco
-│   ├── restore.sh                 # Restore do banco
-│   └── health-check.sh            # Verificação de saúde
-│
-├── logs/                          # Logs (gitignored)
-│   ├── app1/
-│   ├── app2/
-│   ├── app3/
-│   └── nginx/
-│
-├── backups/                       # Backups (gitignored)
-│   └── taskmanager_*.sql.gz
-│
-├── labs/                          # Laboratórios práticos
-│   ├── lab01-stack-multi-container.md
-│   ├── lab02-nginx-escalabilidade.md
-│   └── lab03-producao-ready.md
-│
-└── docs/                          # Documentação
-    ├── troubleshooting.md         # Guia de problemas
-    ├── comandos-cheatsheet.md     # Comandos úteis
-    └── arquitetura.md             # Arquitetura detalhada
-```
-
-## Comandos Principais
-
-### Gerenciamento Básico
+Verificar réplicas:
 
 ```bash
-# Subir todos os serviços
-docker-compose up -d
-
-# Ver status
-docker-compose ps
-
-# Ver logs em tempo real
-docker-compose logs -f
-
-# Parar serviços
-docker-compose stop
-
-# Parar e remover
-docker-compose down
-
-# Restart
-docker-compose restart
+docker ps
 ```
-
-### Operações Específicas
-
-```bash
-# Deploy completo
-./scripts/deploy.sh
-
-# Backup do banco
-./scripts/backup.sh
-
-# Restore do banco
-./scripts/restore.sh
-
-# Health check de todos os serviços
-curl http://localhost/health | jq '.'
-
-# Ver qual instância está respondendo
-for i in {1..10}; do
-  curl -s http://localhost/health | jq -r '.instance.id'
-done
-```
-
-### Debug e Troubleshooting
-
-```bash
-# Logs de serviço específico
-docker-compose logs app1
-docker-compose logs db
-docker-compose logs nginx
-
-# Executar comando em container
-docker-compose exec app1 sh
-docker-compose exec db psql -U taskuser -d taskdb
-
-# Ver uso de recursos
-docker stats
-
-# Rebuild sem cache
-docker-compose build --no-cache
-
-# Ver configuração processada
-docker-compose config
-```
-
-## Serviços e Portas
-
-| Serviço | Porta | URL | Descrição |
-|---------|-------|-----|-----------|
-| **Nginx** | 80 | http://localhost | Proxy reverso |
-| **App1/2/3** | 5000 | Interno | Aplicação Flask |
-| **PostgreSQL** | 5432 | Interno (dev: exposto) | Banco de dados |
-| **Redis** | 6379 | Interno | Cache |
-
-**NOTA:** Em produção, apenas Nginx (porta 80) é exposto externamente.
-
-## Variáveis de Ambiente
-
-Principais variáveis no `.env`:
-
-```bash
-# Database
-POSTGRES_DB=taskdb
-POSTGRES_USER=taskuser
-POSTGRES_PASSWORD=taskpass123
-
-# Redis
-REDIS_PASSWORD=redis123
-
-# Application
-FLASK_ENV=production
-SECRET_KEY=change-this-in-production
-
-# Ports
-APP_PORT=5000
-DB_PORT=5432
-REDIS_PORT=6379
-```
-
-Ver `.env.example` para lista completa.
-
-## Backup e Restore
-
-### Backup Automático
-
-```bash
-# Executar backup manual
-./scripts/backup.sh
-
-# Configurar backup diário (cron)
-# Linux/Mac - adicionar ao crontab:
-0 2 * * * cd /opt/taskmanager && ./scripts/backup.sh
-```
-
-**Backups são salvos em:** `./backups/taskmanager_YYYYMMDD_HHMMSS.sql.gz`
-
-**Retenção:** 7 dias (automático)
-
-### Restore
-
-```bash
-# Executar restore interativo
-./scripts/restore.sh
-
-# Listar backups disponíveis
-ls -lh backups/
-
-# Restore manual
-gunzip -c backups/taskmanager_20251013_020000.sql.gz | \
-  docker-compose exec -T db psql -U taskuser -d taskdb
-```
-
-## Próximos Módulos
-
-### Módulo 06 - Infrastructure as Code
-- Provisionar VMs com Terraform
-- Automatizar deploy com Ansible
-- Gerenciar múltiplos ambientes
-
-### Módulo 07 - CI/CD Pipelines
-- GitHub Actions / GitLab CI
-- Testes automatizados
-- Deploy automatizado
-
-### Módulo 08 - Observabilidade
-- Prometheus + Grafana
-- Logs centralizados com Loki
-- Alertas e dashboards
-
-## Recursos Adicionais
-
-### Documentação
-
-- [Labs Práticos](labs/) - Exercícios hands-on
-- [Troubleshooting Guide](docs/troubleshooting.md) - Problemas e soluções
-- [Comandos Cheat Sheet](docs/comandos-cheatsheet.md) - Comandos úteis
-- [Arquitetura Detalhada](docs/arquitetura.md) - Diagramas e explicações
-
-### Links Úteis
-
-- [Docker Compose Docs](https://docs.docker.com/compose/)
-- [PostgreSQL Docker](https://hub.docker.com/_/postgres)
-- [Redis Docker](https://hub.docker.com/_/redis)
-- [Nginx Docker](https://hub.docker.com/_/nginx)
-- [Flask Documentation](https://flask.palletsprojects.com/)
-
-## Licença
-
-MIT License - ver arquivo LICENSE
-
-## Suporte
-
-- **Discord:** [Link do Discord do curso]
-- **Email:** suporte@cursosdevops.com
-- **Issues:** GitHub Issues
-- **Documentação:** Este README + `/docs`
 
 ---
 
-**Desenvolvido com dedicação para o Curso DevOps Essencial**
+# 📁 7. Scripts de Automação
 
-**Versão:** 1.0.0  
-**Última atualização:** Outubro 2025  
-**Compatível com:** Docker 20.10+, Docker Compose 2.0+
+## Deploy
+
+```bash
+./scripts/deploy.sh
+```
+
+## Backup
+
+```bash
+./scripts/backup.sh
+```
+
+## Restore
+
+```bash
+./scripts/restore.sh
+```
+
+---
+
+# 🛠 8. Troubleshooting
+
+### Ver logs do app:
+
+```bash
+docker-compose logs app
+```
+
+### Ver logs do banco:
+
+```bash
+docker-compose logs db
+```
+
+### Ver containers:
+
+```bash
+docker ps -a
+```
+
+### Rebuild geral:
+
+```bash
+docker-compose build --no-cache
+```
+
+---
+
+# 🎯 9. Conclusão do Módulo
+
+Neste módulo, você evoluiu de um app simples (M03 e M04) para uma **arquitetura completa**, com:
+
+* múltiplos serviços rodando juntos
+* banco de dados persistente
+* cache em memória (Redis)
+* NGINX como reverse proxy
+* múltiplas réplicas da aplicação
+* health checks profissionais
+* scripts de automação
+* ambiente dev e ambiente prod separados
+
+O projeto agora está preparado para:
+
+* **Módulo 07 — CI/CD**
+* **Módulo 08 — Observabilidade e Monitoramento**
+
+---
+
+# 📌 Próximos Passos
+
+No próximo módulo, você aprenderá:
+
+* pipelines
+* automação de build
+* testes
+* deploy contínuo
+* GitHub Actions
+
+Prepare-se — agora começa o DevOps REAL.
+
