@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+
+  taskmanager:
+    build: ./app
+    ports:
+      - "5000:5000"
+    networks:
+      - obs
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./observabilidade/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - obs
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - obs
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - obs
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - obs
+
+networks:
+  obs:
+    driver: bridge
+
