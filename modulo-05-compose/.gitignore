@@ -1,9 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtualenv
+env/
+venv/
+ENV/
+
+# Distribuição e Build
+build/
+dist/
+eggs/
+.eggs/
+*.egg-info/
+
+# Variáveis de Ambiente e Secrets
 .env
-.env.local
-logs/
-backups/
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
 *.log
+logs/
+
+# Testes e Qualidade
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+htmlcov/
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Banco de Dados e Backups
+*.db
+*.sqlite3
 *.sql.gz
 data/
-__pycache__/
-.DS_Store
+backups/

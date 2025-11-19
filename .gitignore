@@ -1,9 +1,14 @@
-.env
-.env.local
-logs/
-backups/
-*.log
-*.sql.gz
-data/
-__pycache__/
+# Adicione estas linhas ao seu .gitignore existente
+
+# Testes e Qualidade
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
 .DS_Store
+Thumbs.db
