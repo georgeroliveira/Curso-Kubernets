@@ -1,57 +1,58 @@
+# Variáveis de Ambiente
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+!.env.example
+
+# Dados e Logs
+logs/
+*.log
+backups/
+*.sql
+*.sql.gz
+data/
+*.db
+*.sqlite
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-
-# Virtualenv
-env/
 venv/
 ENV/
+env/
 
-# Distribuição e Build
-build/
-dist/
-eggs/
-.eggs/
-*.egg-info/
-
-# Variáveis de Ambiente e Secrets
-.env
-.env.*
-!.env.example
+# Node.js
+node_modules/
+npm-debug.log*
 
 # IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
+*.sublime-workspace
 
-# Logs
-*.log
-logs/
-
-# Testes e Qualidade
-.tox/
-.coverage
-.coverage.*
-.cache
-.pytest_cache/
-nosetests.xml
-coverage.xml
-htmlcov/
-
-# Sistema Operacional
+# OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Docker
-.dockerignore
+# Temporários
+*.swp
+*.tmp
+*.bak
 
-# Banco de Dados e Backups
-*.db
-*.sqlite3
-*.sql.gz
-data/
-backups/
+# Certificados
+*.pem
+*.key
+*.crt
+
+# Volumes de desenvolvimento
+postgres-data/
+redis-data/
+
+# Uploads
+uploads/
+media/

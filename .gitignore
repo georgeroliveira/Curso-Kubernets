@@ -1,14 +1,58 @@
-# Adicione estas linhas ao seu .gitignore existente
+# Variáveis de Ambiente
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+!.env.example
 
-# Testes e Qualidade
-.pytest_cache/
-.coverage
-htmlcov/
+# Dados e Logs
+logs/
+*.log
+backups/
+*.sql
+*.sql.gz
+data/
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+ENV/
+env/
+
+# Node.js
+node_modules/
+npm-debug.log*
 
 # IDEs
 .vscode/
 .idea/
+*.sublime-workspace
 
-# Sistema
+# OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Temporários
+*.swp
+*.tmp
+*.bak
+
+# Certificados
+*.pem
+*.key
+*.crt
+
+# Volumes de desenvolvimento
+postgres-data/
+redis-data/
+
+# Uploads
+uploads/
+media/
