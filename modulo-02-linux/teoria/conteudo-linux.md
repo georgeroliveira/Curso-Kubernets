@@ -1,3 +1,0 @@
-# 🚀 Formação Completa em DevOps
-
- 
